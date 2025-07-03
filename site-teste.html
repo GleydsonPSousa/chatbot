@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <!-- Chosen Palette: Fresh Mint & Cream -->
+    <!-- Application Structure Plan: A Single-Page Application (SPA) emulando uma interface de chat. A estrutura é dividida em: 1. Cabeçalho Fixo: Contém o logo, nome da loja e controles de autenticação do usuário. 2. Janela de Chat: Área principal rolável que exibe a conversa. 3. Área de Interação: Um campo de texto para entrada do usuário e botões de opção que aparecem dinamicamente para guiar o fluxo de pedidos. 4. Resumo do Pedido: Uma seção que surge ao final do fluxo, detalhando o pedido e apresentando um botão para enviar via WhatsApp. Esta estrutura foi escolhida por ser intuitiva e guiar o usuário de forma eficaz, minimizando erros e simplificando o processo de decisão. -->
+    <!-- Visualization & Content Choices: A principal forma de apresentação é um fluxo de conversação (árvore de decisão), em vez de gráficos ou tabelas. Objetivo: Guiar o pedido. Método: Botões de múltipla escolha para itens (Sorvete, Picolé) e campos de texto para detalhes (Nome, Quantidade). Interação: Cliques nos botões e digitação. Justificativa: Transforma a tarefa complexa de montar um pedido em uma série de passos simples e gerenciáveis. Para informações gerais (Menu, Horário), o bot fornece blocos de texto. Objetivo: Informar. Método: Respostas textuais geradas pela IA. Justificativa: Responde diretamente às perguntas do usuário de forma clara. Nenhuma biblioteca de gráficos (Chart.js, Plotly) é necessária. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delicias GELADA'S - Chatbot de Pedidos</title>
+    
+    <!-- Tailwind CSS from CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React and Babel from CDN for in-browser JSX transpilation -->
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* Small adjustments for a better look */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Main App component for the Ice Cream Shop Order Chatbot
+        const App = () => {
+            // State to store chat messages, including options for bot messages
+            const [messages, setMessages] = React.useState([]);
+            // State to store user input
+            const [userInput, setUserInput] = React.useState('');
+            // State to manage loading indicator for bot responses
+            const [isLoading, setIsLoading] = React.useState(false);
+            // State to hold the current order details
+            const [currentOrder, setCurrentOrder] = React.useState({
+                items: [],
+                customerName: '',
+                deliveryAddress: '',
+                phoneNumber: '',
+                isOrderComplete: false,
+                currentItemType: '',
+                currentItemFlavor: '',
+                currentItemQuantity: 0,
+            });
+            // State to manage the conversation flow (decision tree states)
+            const [conversationState, setConversationState] = React.useState('START');
+            // Ref for scrolling to the latest message
+            const messagesEndRef = React.useRef(null);
+
+            // Placeholder for the WhatsApp number to send orders to
+            const WHATSAPP_NUMBER = '5511999999999'; // Replace with your actual WhatsApp number
+
+            // Scroll to the bottom of the chat when new messages arrive
+            React.useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [messages]);
+
+            // Initial welcome message from the bot when the component mounts
+            React.useEffect(() => {
+                const startChat = async () => {
+                    setConversationState('START');
+                    const { botResponse, nextState, options } = await getBotResponse('', 'START');
+                    setMessages([{ sender: 'bot', text: botResponse, options: options }]);
+                    setConversationState(nextState);
+                };
+                startChat();
+            }, []);
+
+            // Function to determine bot response and next state based on current state and user input
+            const getBotResponse = async (userText, state) => {
+                let botResponse = '';
+                let nextState = state;
+                let options = []; // Options to be displayed as buttons
+
+                switch (state) {
+                    case 'START':
+                        botResponse = 'Olá! Bem-vindo(a) à Delicias GELADA\'S. O que você gostaria de fazer?';
+                        options = ['Fazer um Pedido', 'Ver Menu', 'Horário de Funcionamento', 'Localização'];
+                        nextState = 'SELECT_ACTION';
+                        break;
+
+                    case 'SELECT_ACTION':
+                        if (userText === 'Fazer um Pedido') {
+                            botResponse = 'Ótimo! O que você gostaria de pedir?';
+                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake'];
+                            nextState = 'SELECT_PRODUCT_TYPE';
+                        } else if (userText === 'Ver Menu') {
+                            botResponse = 'Nosso cardápio inclui: Sorvetes (chocolate, morango, creme, pistache), Picolés (frutas, chocolate), Açaí (com vários acompanhamentos) e Milkshakes (chocolate, morango, ovomaltine).\n\nPosso ajudar com mais alguma coisa?';
+                            options = ['Fazer um Pedido', 'Horário de Funcionamento', 'Localização'];
+                            nextState = 'SELECT_ACTION';
+                        } else if (userText === 'Horário de Funcionamento') {
+                            botResponse = 'Funcionamos de Segunda a Sábado, das 10h às 22h, e aos Domingos, das 14h às 20h.\n\nPosso ajudar com mais alguma coisa?';
+                            options = ['Fazer um Pedido', 'Ver Menu', 'Localização'];
+                            nextState = 'SELECT_ACTION';
+                        } else if (userText === 'Localização') {
+                            botResponse = 'Nossa loja fica na Rua das Flores, 123, Centro.\n\nPosso ajudar com mais alguma coisa?';
+                            options = ['Fazer um Pedido', 'Ver Menu', 'Horário de Funcionamento'];
+                            nextState = 'SELECT_ACTION';
+                        } else {
+                            botResponse = 'Desculpe, não entendi. Por favor, escolha uma das opções.';
+                            options = ['Fazer um Pedido', 'Ver Menu', 'Horário de Funcionamento', 'Localização'];
+                            nextState = 'SELECT_ACTION';
+                        }
+                        break;
+
+                    case 'SELECT_PRODUCT_TYPE':
+                        if (['Sorvete', 'Picolé', 'Açaí', 'Milkshake'].includes(userText)) {
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText }));
+                            if (userText === 'Sorvete') {
+                                botResponse = 'Qual sabor de sorvete você gostaria?';
+                                options = ['Chocolate', 'Morango', 'Creme', 'Pistache', 'Flocos', 'Limão'];
+                                nextState = 'SELECT_FLAVOR';
+                            } else if (userText === 'Picolé') {
+                                botResponse = 'Qual sabor de picolé você gostaria?';
+                                options = ['Frutas', 'Chocolate'];
+                                nextState = 'SELECT_FLAVOR';
+                            } else if (userText === 'Açaí') {
+                                botResponse = 'Ótimo! Quais acompanhamentos você gostaria no seu açaí?';
+                                nextState = 'COLLECT_ACAI_TOPPINGS';
+                            } else if (userText === 'Milkshake') {
+                                botResponse = 'Qual sabor de milkshake você gostaria?';
+                                options = ['Chocolate', 'Morango', 'Ovomaltine'];
+                                nextState = 'SELECT_FLAVOR';
+                            }
+                        } else {
+                            botResponse = 'Por favor, escolha um tipo de produto válido.';
+                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake'];
+                            nextState = 'SELECT_PRODUCT_TYPE';
+                        }
+                        break;
+                    
+                    case 'SELECT_FLAVOR':
+                        setCurrentOrder(prev => ({ ...prev, currentItemFlavor: userText }));
+                        botResponse = `Quantos de ${currentOrder.currentItemType} de ${userText} você gostaria?`;
+                        nextState = 'SELECT_QUANTITY';
+                        break;
+
+                    case 'COLLECT_ACAI_TOPPINGS':
+                        setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `Com ${userText}` }));
+                        botResponse = `Quantos açaís você gostaria?`;
+                        nextState = 'SELECT_QUANTITY';
+                        break;
+
+                    case 'SELECT_QUANTITY':
+                        const quantity = parseInt(userText);
+                        if (!isNaN(quantity) && quantity > 0) {
+                            const newItem = {
+                                produto: currentOrder.currentItemType,
+                                sabor: currentOrder.currentItemFlavor,
+                                quantidade: quantity,
+                            };
+                            setCurrentOrder(prev => ({
+                                ...prev,
+                                items: [...prev.items, newItem],
+                                currentItemType: '',
+                                currentItemFlavor: '',
+                                currentItemQuantity: 0,
+                            }));
+                            botResponse = 'Item adicionado! Deseja adicionar mais itens ao seu pedido?';
+                            options = ['Sim', 'Não'];
+                            nextState = 'ADD_MORE_ITEMS';
+                        } else {
+                            botResponse = 'Por favor, digite uma quantidade válida (um número maior que zero).';
+                            nextState = 'SELECT_QUANTITY';
+                        }
+                        break;
+
+                    case 'ADD_MORE_ITEMS':
+                        if (userText === 'Sim') {
+                            botResponse = 'O que mais você gostaria de pedir?';
+                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake'];
+                            nextState = 'SELECT_PRODUCT_TYPE';
+                        } else if (userText === 'Não') {
+                            botResponse = 'Certo. Qual é o seu nome completo?';
+                            nextState = 'COLLECT_NAME';
+                        } else {
+                            botResponse = 'Por favor, escolha "Sim" ou "Não".';
+                            options = ['Sim', 'Não'];
+                            nextState = 'ADD_MORE_ITEMS';
+                        }
+                        break;
+
+                    case 'COLLECT_NAME':
+                        setCurrentOrder(prev => ({ ...prev, customerName: userText }));
+                        botResponse = 'Você gostaria de entrega ou retirada na loja?';
+                        options = ['Entrega', 'Retirada na Loja'];
+                        nextState = 'COLLECT_DELIVERY_OPTION';
+                        break;
+
+                    case 'COLLECT_DELIVERY_OPTION':
+                        if (userText === 'Entrega') {
+                            botResponse = 'Por favor, informe o endereço completo para entrega.';
+                            nextState = 'COLLECT_ADDRESS';
+                        } else if (userText === 'Retirada na Loja') {
+                            setCurrentOrder(prev => ({ ...prev, deliveryAddress: 'Retirada na Loja' }));
+                            botResponse = 'Qual é o seu número de telefone para contato?';
+                            nextState = 'COLLECT_PHONE';
+                        } else {
+                            botResponse = 'Por favor, escolha "Entrega" ou "Retirada na Loja".';
+                            options = ['Entrega', 'Retirada na Loja'];
+                            nextState = 'COLLECT_DELIVERY_OPTION';
+                        }
+                        break;
+
+                    case 'COLLECT_ADDRESS':
+                        setCurrentOrder(prev => ({ ...prev, deliveryAddress: userText }));
+                        botResponse = 'Qual é o seu número de telefone para contato?';
+                        nextState = 'COLLECT_PHONE';
+                        break;
+
+                    case 'COLLECT_PHONE':
+                        setCurrentOrder(prev => ({ ...prev, phoneNumber: userText, isOrderComplete: true }));
+                        botResponse = 'Ótimo! Seu pedido está pronto. Por favor, revise e clique no botão abaixo para enviar via WhatsApp.';
+                        nextState = 'ORDER_CONFIRMATION';
+                        break;
+                    
+                    default:
+                        botResponse = 'Desculpe, algo deu errado. Vamos começar de novo.';
+                        options = ['Fazer um Pedido', 'Ver Menu', 'Horário de Funcionamento', 'Localização'];
+                        nextState = 'SELECT_ACTION';
+                        break;
+                }
+                return { botResponse, nextState, options };
+            };
+
+            const sendMessage = async (text) => {
+                setMessages((prevMessages) => [...prevMessages, { sender: 'user', text }]);
+                setUserInput('');
+                setIsLoading(true);
+
+                const { botResponse, nextState, options } = await getBotResponse(text, conversationState);
+                
+                // Simulate bot thinking time for a better UX
+                setTimeout(() => {
+                    setMessages((prevMessages) => [...prevMessages, { sender: 'bot', text: botResponse, options: options }]);
+                    setConversationState(nextState);
+                    setIsLoading(false);
+                }, 500);
+            };
+
+            const handleSendMessage = (e) => {
+                e.preventDefault();
+                if (userInput.trim()) {
+                    sendMessage(userInput.trim());
+                }
+            };
+            
+            const handleOptionClick = (optionText) => {
+                sendMessage(optionText);
+            };
+
+            const handleSendOrder = () => {
+                if (!currentOrder.isOrderComplete) return;
+
+                let orderSummary = `Olá, Delicias GELADA'S!%0A%0A`;
+                orderSummary += `Gostaria de fazer o seguinte pedido:%0A`;
+
+                currentOrder.items.forEach((item, index) => {
+                    orderSummary += `• ${item.quantidade}x ${item.produto} ${item.sabor}%0A`;
+                });
+
+                orderSummary += `%0A*Detalhes do Cliente:*%0A`;
+                orderSummary += `Nome: ${currentOrder.customerName}%0A`;
+                orderSummary += `Endereço: ${currentOrder.deliveryAddress}%0A`;
+                orderSummary += `Telefone: ${currentOrder.phoneNumber}%0A`;
+                orderSummary += `%0A`;
+                orderSummary += `Obrigado!`;
+
+                const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${orderSummary}`;
+                window.open(whatsappUrl, '_blank');
+            };
+            
+            const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0) || currentOrder.isOrderComplete;
+
+            return (
+                <div className="flex flex-col h-screen antialiased text-gray-800">
+                    <header className="bg-green-600 text-white p-4 flex items-center justify-between shadow-lg">
+                        <div className="flex items-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4 overflow-hidden border-2 border-green-200">
+                                <img
+                                    alt="Delicias GELADA'S Logo"
+                                    className="w-full h-full object-cover"
+                                    src="https://storage.googleapis.com/gemini-generated-images-web/images/iStock-855447930.jpg-74ee8ee5-12da-41a2-b0bd-b16f3efd1cc6"
+                                    onError={(e) => { e.target.src = 'https://placehold.co/48x48/ffffff/333333?text=DG'; }}
+                                />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-bold">Delicias GELADA'S</h1>
+                                <p className="text-xs text-green-200">Assistente de Pedidos</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
+                        <div className="space-y-4">
+                            {messages.map((msg, index) => (
+                                <div key={index} className={`flex items-end ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-md px-4 py-3 rounded-2xl ${msg.sender === 'user' ? 'bg-blue-500 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none shadow-md'}`}>
+                                        <p className="text-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }} />
+                                        {msg.options && msg.options.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-3">
+                                                {msg.options.map((option, optIndex) => (
+                                                    <button
+                                                        key={optIndex}
+                                                        onClick={() => handleOptionClick(option)}
+                                                        className="px-4 py-1.5 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition duration-300 text-sm font-medium"
+                                                    >
+                                                        {option}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {isLoading && (
+                                <div className="flex items-end justify-start">
+                                    <div className="max-w-md px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-none shadow-md">
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse"></div>
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse delay-300"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    </main>
+                    
+                    {currentOrder.isOrderComplete ? (
+                        <footer className="p-4 bg-white border-t-2 border-green-500 shadow-up">
+                            <h3 className="text-lg font-bold text-gray-800 mb-2">✅ Pedido Pronto!</h3>
+                            <div className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg border">
+                                <p className="font-semibold mb-1">Resumo:</p>
+                                {currentOrder.items.map((item, index) => <p key={index}>- {item.quantidade}x {item.produto} {item.sabor}</p>)}
+                                <p className="mt-2"><b>Cliente:</b> {currentOrder.customerName}</p>
+                                <p><b>Contato:</b> {currentOrder.phoneNumber}</p>
+                                <p><b>Entrega:</b> {currentOrder.deliveryAddress}</p>
+                            </div>
+                            <button
+                                onClick={handleSendOrder}
+                                className="w-full p-3 bg-green-500 text-white rounded-lg shadow-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 font-bold flex items-center justify-center gap-2"
+                            >
+                                Enviar Pedido via WhatsApp
+                                <span className="w-6 h-6">
+                                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.61 15.31 3.45 16.73L2.05 22L7.31 20.6C8.69 21.36 10.32 21.82 12.04 21.82C17.5 21.82 21.95 17.37 21.95 11.91C21.95 6.45 17.5 2 12.04 2M12.04 3.62C16.63 3.62 20.33 7.32 20.33 11.91C20.33 16.5 16.63 20.2 12.04 20.2C10.49 20.2 9.03 19.78 7.8 19.05L7.29 18.73L4.85 19.38L5.53 17L5.2 16.48C4.41 15.15 3.96 13.57 3.96 11.91C3.96 7.32 7.66 3.62 12.04 3.62M9.03 7.23C8.83 7.23 8.66 7.24 8.51 7.24C8.21 7.24 7.91 7.33 7.67 7.61C7.42 7.89 6.81 8.46 6.81 9.58C6.81 10.7 7.7 11.75 7.85 11.92C8 12.09 9.35 14.33 11.69 15.26C13.62 16.03 14.04 15.86 14.38 15.81C15.2 15.69 15.93 15.03 16.2 14.28C16.48 13.53 16.48 12.93 16.39 12.79C16.31 12.65 16.14 12.58 15.88 12.44C15.63 12.31 14.45 11.74 14.21 11.65C13.96 11.56 13.8 11.51 13.64 11.79C13.48 12.07 13.06 12.58 12.92 12.75C12.77 12.92 12.63 12.94 12.38 12.81C12.13 12.67 11.29 12.39 10.29 11.5C9.52 10.82 9.03 10.01 8.86 9.73C8.69 9.45 8.84 9.32 8.98 9.18C9.11 9.06 9.26 8.87 9.38 8.73C9.5 8.59 9.55 8.48 9.64 8.3C9.72 8.12 9.64 7.95 9.55 7.81C9.47 7.68 9.03 6.5 9.03 7.23Z" /></svg>
+                                </span>
+                            </button>
+                        </footer>
+                    ) : (
+                        <footer className="bg-white p-2 border-t border-gray-200">
+                            <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={userInput}
+                                    onChange={(e) => setUserInput(e.target.value)}
+                                    placeholder={isInputDisabled ? "Escolha uma opção acima..." : "Digite aqui..."}
+                                    className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300"
+                                    disabled={isInputDisabled}
+                                />
+                                <button
+                                    type="submit"
+                                    className="p-3 bg-green-500 text-white rounded-full shadow-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:bg-gray-400"
+                                    disabled={isLoading || !userInput.trim()}
+                                >
+                                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l.684-.275a1 1 0 00.57-1.391L10.28 9.873a1 1 0 011.44-1.44l6.76 6.76a1 1 0 001.39-1.168l-14-7z"></path></svg>
+                                </button>
+                            </form>
+                        </footer>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
