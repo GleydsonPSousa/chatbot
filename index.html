@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- Chosen Palette: Fresh Mint & Cream -->
-    <!-- Application Structure Plan: A Single-Page Application (SPA) emulando uma interface de chat. A estrutura é dividida em: 1. Cabeçalho Fixo: Contém o logo, nome da loja. 2. Janela de Chat: Área principal rolável que exibe a conversa. 3. Área de Interação: Um campo de texto para entrada do usuário e botões de opção que aparecem dinamicamente para guiar o fluxo de pedidos. 4. Resumo do Pedido: Uma seção que surge ao final do fluxo, detalhando o pedido e apresentando um botão para enviar via WhatsApp. Esta estrutura foi escolhida por ser intuitiva e guiar o usuário de forma eficaz, minimizando erros e simplificando o processo de decisão. -->
-    <!-- Visualization & Content Choices: A principal forma de apresentação é um fluxo de conversação (árvore de decisão). Objetivo: Guiar o pedido. Método: Botões de múltipla escolha para itens (Sorvete, Picolé) e campos de texto para detalhes (Nome, Quantidade). Interação: Cliques nos botões e digitação. Justificativa: Transforma a tarefa complexa de montar um pedido em uma série de passos simples e gerenciáveis. Nenhuma biblioteca de gráficos (Chart.js, Plotly) é necessária. -->
+    <!-- Chosen Palette: Fresh Mint & Cream (com toques de verde e azul suaves) -->
+    <!-- Application Structure Plan: A Single-Page Application (SPA) emulando uma interface de chat. A estrutura é dividida em: 1. Cabeçalho Fixo: Contém o logo estilizado e o nome da loja, com um design limpo. 2. Janela de Chat: Área principal rolável que exibe a conversa, com balões de mensagem de design suave e animações de carregamento amigáveis. 3. Área de Interação: Um campo de texto para entrada do usuário e botões de opção que aparecem dinamicamente para guiar o fluxo de pedidos, com um visual mais integrado e responsivo. 4. Resumo do Pedido: Uma seção que surge ao final do fluxo, detalhando o pedido com um layout de cartão, e um botão principal para enviar via WhatsApp. Esta estrutura foi escolhida por ser intuitiva e guiar o usuário de forma eficaz, minimizando erros e simplificando o processo de decisão, com um foco renovado na estética e na experiência do usuário. -->
+    <!-- Visualization & Content Choices: A principal forma de apresentação é um fluxo de conversação (árvore de decisão). Objetivo: Guiar o pedido de forma familiar. Método: Balões de chat com texto e botões de múltipla escolha para itens (Sorvete, Picolé, Açaí, Milkshake, bases, sabores) e campo de texto para detalhes (Nome, Quantidade, Acompanhamentos de Açaí). Interação: Cliques nos botões e digitação no campo de texto. Justificativa: A interface de chat é inerentemente conversacional e a familiaridade com o WhatsApp reduz a curva de aprendizado. O resumo final do pedido é um bloco de texto formatado para clareza. Nenhuma biblioteca de gráficos (Chart.js, Plotly) é necessária, pois o foco é na interação conversacional e na simplicidade do pedido. -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 
     <meta charset="UTF-8">
@@ -24,6 +24,56 @@
             font-family: 'Inter', sans-serif;
         }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        /* Custom animation for loading dots */
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        .animate-pulse-dot {
+            animation: pulse-dot 1.4s infinite ease-in-out;
+        }
+        .animate-pulse-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .animate-pulse-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        /* WhatsApp-like message bubble tails */
+        .message-tail-user::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: -7px; /* Adjust as needed */
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-bottom: 10px solid #25D366; /* WhatsApp green */
+            border-top: 10px solid transparent;
+            transform: skewX(-30deg); /* Creates the tail effect */
+            border-bottom-right-radius: 5px; /* Smooth corner */
+        }
+
+        .message-tail-bot::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -7px; /* Adjust as needed */
+            width: 0;
+            height: 0;
+            border-right: 10px solid transparent;
+            border-bottom: 10px solid white; /* White bubble */
+            border-top: 10px solid transparent;
+            transform: skewX(30deg); /* Creates the tail effect */
+            border-bottom-left-radius: 5px; /* Smooth corner */
+        }
+
+        /* WhatsApp-like chat background pattern */
+        .chat-background {
+            background-image: url('https://www.transparenttextures.com/patterns/clean-textile.png'); /* Subtle texture */
+            background-color: #E5DDD5; /* Light WhatsApp chat background color */
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -75,6 +125,15 @@
                 { name: 'Ovomaltine', price: '4,00' },
             ];
 
+            // Data for popsicle pricing tiers
+            const popsicleTiers = [
+                { min: 1, max: 29, price: 1.00 },
+                { min: 30, max: 299, price: 0.85 },
+                { min: 300, max: 999, price: 0.80 },
+                { min: 1000, max: 1999, price: 0.75 },
+                { min: 2000, max: Infinity, price: 0.70 },
+            ];
+
             // Helper to parse price from string (e.g., "R$ 7,00")
             const getPriceFromString = (str) => {
                 const match = str.match(/R\$ (\d+,\d{2})/);
@@ -95,6 +154,16 @@
                     }
                 });
                 return totalToppingCost;
+            };
+
+            // Helper to get popsicle unit price based on quantity
+            const getPopsicleUnitPrice = (quantity) => {
+                for (const tier of popsicleTiers) {
+                    if (quantity >= tier.min && quantity <= tier.max) {
+                        return tier.price;
+                    }
+                }
+                return 1.00; // Default price if no tier matches (e.g., quantity 0 or negative, though validation should prevent this)
             };
 
             // Scroll to the bottom of the chat when new messages arrive
@@ -419,11 +488,20 @@
                     case 'SELECT_QUANTITY':
                         const quantity = parseInt(userText);
                         if (!isNaN(quantity) && quantity > 0) {
+                            let unitPrice = 0;
+                            if (currentOrder.currentItemType === 'Picolé') {
+                                unitPrice = getPopsicleUnitPrice(quantity);
+                            } else if (currentOrder.currentItemType === 'Açaí') {
+                                unitPrice = currentOrder.currentItemTotalPrice; // Açaí total price already calculated with toppings
+                            }
+                            // For other items like Sorvete/Milkshake, you would define their unit prices here if needed
+                            // For now, they don't have specific pricing logic like açaí or popsicles.
+
                             const newItem = {
                                 produto: currentOrder.currentItemType,
                                 sabor: currentOrder.currentItemFlavor + (currentOrder.currentItemToppings && currentOrder.currentItemType === 'Açaí' ? ` ${currentOrder.currentItemToppings}` : ''), // Include toppings in flavor for Açaí
                                 quantidade: quantity,
-                                precoUnitario: currentOrder.currentItemType === 'Açaí' ? currentOrder.currentItemTotalPrice : null, // Store unit price for açaí
+                                precoUnitario: unitPrice > 0 ? unitPrice : null, // Store unit price if calculated
                             };
                             setCurrentOrder(prev => ({
                                 ...prev,
@@ -589,15 +667,29 @@
                 // For WhatsApp, replace newlines with %0A
                 const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(orderSummaryText)}`;
                 window.open(whatsappUrl, '_blank');
+
+                // Reset order and conversation state after sending
+                setCurrentOrder({
+                    items: [], customerName: '', deliveryAddress: '', phoneNumber: '', isOrderComplete: false,
+                    currentItemType: '', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemQuantity: 0, currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0,
+                });
+                setMessages([]); // Clear chat history for a fresh start
+                setConversationState('START'); // Reset to start for a new order
+                // Trigger initial message after reset
+                setTimeout(async () => {
+                    const { botResponse, nextState, options } = await getBotResponse('', 'START');
+                    setMessages([{ sender: 'bot', text: botResponse, options: options }]);
+                    setConversationState(nextState);
+                }, 1000); // Small delay to allow WhatsApp redirect
             };
             
             const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0 && conversationState !== 'COLLECT_ACAI_TOPPINGS' && conversationState !== 'SELECT_QUANTITY' && conversationState !== 'COLLECT_NAME' && conversationState !== 'COLLECT_ADDRESS' && conversationState !== 'COLLECT_PHONE') || currentOrder.isOrderComplete;
 
             return (
                 <div className="flex flex-col h-screen antialiased text-gray-800">
-                    <header className="bg-green-600 text-white p-4 flex items-center justify-between shadow-lg">
+                    <header className="bg-whatsapp-green text-white p-4 flex items-center justify-between shadow-lg rounded-b-2xl">
                         <div className="flex items-center">
-                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4 overflow-hidden border-2 border-green-200">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4 overflow-hidden border-2 border-green-300 shadow-md">
                                 <img
                                     alt="Delicias GELADA'S Logo"
                                     className="w-full h-full object-cover"
@@ -607,24 +699,33 @@
                             </div>
                             <div>
                                 <h1 className="text-xl font-bold">Delicias GELADA'S</h1>
-                                <p className="text-xs text-green-200">Assistente de Pedidos</p>
+                                <p className="text-xs text-green-200">Online</p>
                             </div>
                         </div>
+                        {/* WhatsApp-like menu icon (three dots) */}
+                        <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
                     </header>
 
-                    <main className="flex-1 p-4 overflow-y-auto bg-gray-50">
+                    <main className="flex-1 p-4 overflow-y-auto chat-background">
                         <div className="space-y-4">
                             {messages.map((msg, index) => (
-                                <div key={index} className={`flex items-end ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-md px-4 py-3 rounded-2xl ${msg.sender === 'user' ? 'bg-blue-500 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none shadow-md'}`}>
-                                        <p className="text-sm" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }} />
-                                        {msg.options && msg.options.length > 0 && (
+                                <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`relative max-w-md px-4 py-3 rounded-2xl shadow-md transition-all duration-300 ease-in-out ${
+                                        msg.sender === 'user'
+                                            ? 'bg-whatsapp-green text-white rounded-br-none message-tail-user'
+                                            : 'bg-white text-gray-800 rounded-bl-none message-tail-bot'
+                                    }`}>
+                                        <p className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }} />
+                                        {/* Only render options if this is the last message AND it's from the bot */}
+                                        {index === messages.length - 1 && msg.options && msg.options.length > 0 && msg.sender === 'bot' && (
                                             <div className="flex flex-wrap gap-2 mt-3">
                                                 {msg.options.map((option, optIndex) => (
                                                     <button
                                                         key={optIndex}
                                                         onClick={() => handleOptionClick(option)}
-                                                        className="px-4 py-1.5 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition duration-300 text-sm font-medium"
+                                                        className="px-4 py-1.5 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition duration-300 text-sm font-medium shadow-sm hover:shadow-md"
                                                     >
                                                         {option}
                                                     </button>
@@ -635,12 +736,12 @@
                                 </div>
                             ))}
                             {isLoading && (
-                                <div className="flex items-end justify-start">
-                                    <div className="max-w-md px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-none shadow-md">
+                                <div className="flex justify-start">
+                                    <div className="relative max-w-md px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-none shadow-lg message-tail-bot">
                                         <div className="flex items-center space-x-2">
-                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse"></div>
-                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
-                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse delay-300"></div>
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse-dot"></div>
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse-dot"></div>
+                                            <div className="w-2.5 h-2.5 bg-gray-300 rounded-full animate-pulse-dot"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -650,9 +751,9 @@
                     </main>
                     
                     {currentOrder.isOrderComplete ? (
-                        <footer className="p-4 bg-white border-t-2 border-green-500 shadow-up">
+                        <footer className="p-4 bg-white border-t-2 border-green-500 shadow-xl rounded-t-2xl">
                             <h3 className="text-lg font-bold text-gray-800 mb-2">✅ Pedido Pronto!</h3>
-                            <div className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-lg border">
+                            <div className="text-sm text-gray-600 mb-4 p-4 bg-green-50 rounded-xl border border-green-200 shadow-inner">
                                 <p className="font-semibold mb-1">Resumo:</p>
                                 {currentOrder.items.map((item, index) => (
                                     <p key={index}>- {item.quantidade}x {item.produto} {item.sabor} {item.precoUnitario ? `(R$ ${item.precoUnitario.toFixed(2).replace('.', ',')}/un)` : ''}</p>
@@ -660,12 +761,12 @@
                                 <p className="mt-2"><b>Cliente:</b> {currentOrder.customerName}</p>
                                 <p><b>Contato:</b> {currentOrder.phoneNumber}</p>
                                 <p><b>Entrega:</b> {currentOrder.deliveryAddress}</p>
-                                <p className="mt-2 text-lg font-bold">Total: R$ {currentOrder.items.reduce((acc, item) => acc + (item.quantidade * (item.precoUnitario || 0)), 0).toFixed(2).replace('.', ',')}</p>
+                                <p className="mt-2 text-lg font-bold text-green-700">Total: R$ {currentOrder.items.reduce((acc, item) => acc + (item.quantidade * (item.precoUnitario || 0)), 0).toFixed(2).replace('.', ',')}</p>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <button
                                     onClick={handleSendOrder}
-                                    className="w-full p-3 bg-green-500 text-white rounded-lg shadow-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 font-bold flex items-center justify-center gap-2"
+                                    className="w-full p-3 bg-whatsapp-green text-white rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 font-bold flex items-center justify-center gap-2 transform hover:scale-105"
                                 >
                                     Enviar Pedido via WhatsApp
                                     <span className="w-6 h-6">
@@ -675,19 +776,19 @@
                             </div>
                         </footer>
                     ) : (
-                        <footer className="p-2 bg-white border-t border-gray-200">
-                            <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                        <footer className="bg-white p-4 border-t border-gray-200 shadow-xl rounded-t-2xl">
+                            <form onSubmit={handleSendMessage} className="flex items-center gap-3">
                                 <input
                                     type="text"
                                     value={userInput}
                                     onChange={(e) => setUserInput(e.target.value)}
-                                    placeholder={isInputDisabled ? "Escolha uma opção acima..." : "Digite aqui..."}
-                                    className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300"
+                                    placeholder={isInputDisabled ? "Escolha uma opção acima..." : "Digite sua mensagem..."}
+                                    className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-whatsapp-green transition duration-300 text-gray-700 placeholder-gray-400 shadow-sm"
                                     disabled={isInputDisabled}
                                 />
                                 <button
                                     type="submit"
-                                    className="p-3 bg-green-500 text-white rounded-full shadow-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition disabled:bg-gray-400"
+                                    className="p-3 bg-whatsapp-green text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:shadow-none disabled:transform-none"
                                     disabled={isLoading || !userInput.trim()}
                                 >
                                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l.684-.275a1 1 0 00.57-1.391L10.28 9.873a1 1 0 011.44-1.44l6.76 6.76a1 1 0 001.39-1.168l-14-7z"></path></svg>
