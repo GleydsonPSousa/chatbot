@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- Chosen Palette: Fresh Mint & Cream (com toques de verde e azul suaves) -->
-    <!-- Application Structure Plan: A Single-Page Application (SPA) emulando uma interface de chat. A estrutura é dividida em: 1. Cabeçalho Fixo: Contém o logo estilizado e o nome da loja, com um design limpo. 2. Janela de Chat: Área principal rolável que exibe a conversa, com balões de mensagem de design suave e animações de carregamento amigáveis. 3. Área de Interação: Um campo de texto para entrada do usuário e botões de opção que aparecem dinamicamente para guiar o fluxo de pedidos, com um visual mais integrado e responsivo. 4. Resumo do Pedido: Uma seção que surge ao final do fluxo, detalhando o pedido com um layout de cartão, e um botão principal para enviar via WhatsApp. Esta estrutura foi escolhida por ser intuitiva e guiar o usuário de forma eficaz, minimizando erros e simplificando o processo de decisão, com um foco renovado na estética e na experiência do usuário. -->
-    <!-- Visualization & Content Choices: A principal forma de apresentação é um fluxo de conversação (árvore de decisão). Objetivo: Guiar o pedido de forma familiar. Método: Balões de chat com texto e botões de múltipla escolha para itens (Sorvete, Picolé, Açaí, Milkshake, bases, sabores) e campo de texto para detalhes (Nome, Quantidade, Acompanhamentos de Açaí). Interação: Cliques nos botões e digitação no campo de texto. Justificativa: A interface de chat é inerentemente conversacional e a familiaridade com o WhatsApp reduz a curva de aprendizado. O resumo final do pedido é um bloco de texto formatado para clareza. Nenhuma biblioteca de gráficos (Chart.js, Plotly) é necessária, pois o foco é na interação conversacional e na simplicidade do pedido. -->
+    <!-- Chosen Palette: Verde Musgo & Fundo Verde Claro (com toques de verde e azul suaves) -->
+    <!-- Application Structure Plan: A Single-Page Application (SPA) emulando uma interface de chat do WhatsApp. A estrutura é dividida em: 1. Cabeçalho Fixo: Estilizado como a barra superior do WhatsApp, com logo da loja, nome e status "Online". 2. Janela de Chat: Área principal rolável que exibe a conversa, com balões de mensagem de design suave e animações de carregamento amigáveis. 3. Área de Interação: Um campo de texto para entrada do usuário e botões de opção que aparecem dinamicamente para guiar o fluxo de pedidos, com um visual mais integrado e responsivo. 4. Resumo do Pedido: Uma seção que surge ao final do fluxo, detalhando o pedido com um layout de cartão, e um botão principal para enviar via WhatsApp. Esta estrutura foi escolhida para maximizar a familiaridade e a usabilidade, aproveitando o reconhecimento da interface do WhatsApp para guiar o usuário de forma eficaz e amigável. -->
+    <!-- Visualization & Content Choices: A principal forma de apresentação é um fluxo de conversação (árvore de decisão). Objetivo: Guiar o pedido de forma familiar. Método: Balões de chat com texto e botões de múltipla escolha para itens (Sorvete, Picolé, Açaí, Milkshake, bases, sabores) e campo de texto para detalhes (Nome, Quantidade, Acompanhamentos de Açaí). Interação: Cliques nos botões e digitação no campo de texto. Justificativa: A interface de chat é inerentemente conversacional e a familiaridade com o WhatsApp reduz a curva de aprendizado. O resumo final do pedido é um bloco de texto formatado para clareza. Novas funcionalidades LLM: 1. Descrição de Produtos: O bot pode fornecer descrições detalhadas de sabores/itens usando LLM. Objetivo: Informar e engajar. Método: Resposta textual dinâmica. 2. Sugestão Criativa de Pedido: O bot pode sugerir combinações de produtos usando LLM. Objetivo: Engajar e facilitar a escolha. Método: Resposta textual dinâmica com opções de ação. Nenhuma biblioteca de gráficos (Chart.js, Plotly) é necessária, pois o foco é na interação conversacional e na simplicidade do pedido. -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 
     <meta charset="UTF-8">
@@ -49,7 +49,7 @@
             width: 0;
             height: 0;
             border-left: 10px solid transparent;
-            border-bottom: 10px solid #25D366; /* WhatsApp green */
+            border-bottom: 10px solid #4A574F; /* Moss Green */
             border-top: 10px solid transparent;
             transform: skewX(-30deg); /* Creates the tail effect */
             border-bottom-right-radius: 5px; /* Smooth corner */
@@ -72,7 +72,7 @@
         /* WhatsApp-like chat background pattern */
         .chat-background {
             background-image: url('https://www.transparenttextures.com/patterns/clean-textile.png'); /* Subtle texture */
-            background-color: #E5DDD5; /* Light WhatsApp chat background color */
+            background-color: #E0F0E0; /* Light Green BG */
         }
     </style>
 </head>
@@ -104,6 +104,10 @@
                 currentItemToppingsPrice: 0, // Calculated price of açaí toppings
                 currentItemTotalPrice: 0, // Total price for the current item being built
                 currentItemQuantity: 0,
+                paymentMethod: '', // New state for payment method
+                finalOrderTotal: 0, // New state for final total including fees
+                isDeliverySelected: false, // New state to track if delivery was chosen
+                tempSelectedToppings: [], // Temporary array to hold selected toppings for açaí
             });
             // State to manage the conversation flow (decision tree states)
             const [conversationState, setConversationState] = React.useState('START');
@@ -144,11 +148,10 @@
             };
 
             // Helper to calculate toppings price
-            const calculateToppingsPrice = (toppingsInput, availableToppings) => {
+            const calculateToppingsPrice = (toppingsArray, availableToppings) => {
                 let totalToppingCost = 0;
-                const selectedToppings = toppingsInput.split(',').map(t => t.trim().toLowerCase());
-                selectedToppings.forEach(selected => {
-                    const found = availableToppings.find(t => t.name.toLowerCase() === selected);
+                toppingsArray.forEach(selectedToppingName => {
+                    const found = availableToppings.find(t => t.name === selectedToppingName);
                     if (found) {
                         totalToppingCost += parseFloat(found.price.replace(',', '.'));
                     }
@@ -165,6 +168,48 @@
                 }
                 return 1.00; // Default price if no tier matches (e.g., quantity 0 or negative, though validation should prevent this)
             };
+
+            // Function to call Gemini LLM for dynamic responses
+            const callGeminiLLM = async (promptText) => {
+                let chatHistory = [];
+                chatHistory.push({
+                    role: "user",
+                    parts: [{
+                        text: `Você é um chatbot para a "Delicias GELADA'S". Responda de forma amigável e útil.
+                        Informações da Delicias GELADA'S:
+                        - Sorvetes: Leite (chocolate, creme, flocos), Fruta (morango, pistache, limão), de Massa (Tradicional, Especial, Trufado).
+                        - Picolés: Leite (Abacaxi Suíço, Amendoim, Banana, Baunilha, Blue Ice, Bombom, Chiclete, Chocolate, Chocomenta, Coco Queimado, Chocolate Branco, Coco, Cookies, Flocos, Ice Ninho, Leite Condensado, Limão Suíço, Milho, Mousse de Maracujá, Morango), Fruta (Abacaxi, Açaí, Groselha, Limão, Manga, Maracujá, Melancia, Pinta Língua, Tangerina, Kiwi, Uva).
+                        - Açaí: Copo (300ml - R$ 7,00, 500ml - R$ 10,00, 770ml - R$ 13,00), Caixa (2 litros - R$ 28,00, 5 litros - R$ 60,00, 10 litros - R$ 100,00). Acompanhamentos (Leite em Pó R$2,50, Leite Condensado R$2,50, Paçoca R$2,50, Granola R$3,00, Cobertura de Chocolate R$2,50, Cobertura de Morango R$2,50, Chocoball R$3,50, Ovomaltine R$4,00).
+                        - Milkshakes: Baunilha, Morango, Chocolate, Oreo, Paçoca, Ovomaltine.
+
+                        Sua tarefa é responder a pergunta do cliente ou gerar uma sugestão/descrição.
+                        ${promptText}`
+                    }]
+                });
+
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // API key will be provided by the environment
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        return result.candidates[0].content.parts[0].text;
+                    }
+                    return "Desculpe, não consegui entender sua solicitação no momento.";
+                } catch (error) {
+                    console.error("Erro ao chamar a API Gemini:", error);
+                    return "Desculpe, houve um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.";
+                }
+            };
+
 
             // Scroll to the bottom of the chat when new messages arrive
             React.useEffect(() => {
@@ -191,17 +236,17 @@
                 // Handle "Voltar" option universally based on current state
                 if (userText === 'Voltar ao Início') {
                     botResponse = 'Voltando ao início. O que você gostaria de fazer?';
-                    options = ['Fazer um Pedido'];
+                    options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
                     nextState = 'SELECT_ACTION';
                     return { botResponse, nextState, options };
                 } else if (userText === 'Voltar para Tipo de Produto') {
                     botResponse = 'Voltando à seleção de tipo de produto. O que você gostaria de pedir?';
-                    options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake'];
+                    options = ['Sorvete de Massa', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
                     nextState = 'SELECT_PRODUCT_TYPE';
                     return { botResponse, nextState, options };
                 } else if (userText === 'Voltar para Base de Sorvete') {
                     botResponse = 'Voltando para a seleção da base do sorvete. Qual tipo de sorvete você gostaria?';
-                    options = ['Leite', 'Fruta', 'Voltar para Tipo de Produto'];
+                    options = ['Leite', 'Fruta', 'de Massa', 'Voltar para Tipo de Produto'];
                     nextState = 'SELECT_ICE_CREAM_BASE';
                     return { botResponse, nextState, options };
                 } else if (userText === 'Voltar para Base de Picolé') {
@@ -220,28 +265,39 @@
                     nextState = 'SELECT_ACAI_SIZE';
                     return { botResponse, nextState, options };
                 } else if (userText === 'Voltar para Acompanhamentos do Açaí') {
-                    let toppingsListText = 'Voltando para escolher acompanhamentos do açaí. Quais acompanhamentos você gostaria? (Digite um ou mais, separados por vírgula)\n\nDisponíveis:\n';
+                    // Reset tempSelectedToppings when coming back to this state
+                    setCurrentOrder(prev => ({ ...prev, tempSelectedToppings: [] }));
+                    let toppingsListText = 'Voltando para escolher acompanhamentos do açaí. Quais acompanhamentos você gostaria? (Selecione um por vez)\n\nDisponíveis:\n';
                     acaiToppings.forEach(topping => {
                         toppingsListText += `- ${topping.name} R$ ${topping.price}\n`;
                     });
-                    toppingsListText += '\nVocê pode digitar "Nenhum" se não quiser acompanhamentos.';
-
-                    botResponse = toppingsListText;
+                    toppingsListText += '\nQuando terminar, clique em "Finalizar Acompanhamentos" ou "Nenhum" se não quiser.';
+                    options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
                     nextState = 'COLLECT_ACAI_TOPPINGS';
+                    return { botResponse, nextState, options };
+                } else if (userText === 'Voltar para Tamanho da Caixa de Açaí') {
+                    botResponse = 'Voltando para a seleção do tamanho da caixa de açaí. Qual tamanho você gostaria?';
+                    options = ['2 litros - R$ 28,00', '5 litros - R$ 60,00', '10 litros - R$ 100,00', 'Voltar para Embalagem de Açaí'];
+                    nextState = 'SELECT_ACAI_BOX_SIZE';
                     return { botResponse, nextState, options };
                 }
                  else if (userText === 'Voltar à Seleção de Sabor/Acompanhamento') {
                     if (currentOrder.currentItemType === 'Açaí') {
                         botResponse = 'Voltando para escolher acompanhamentos do açaí. Quais acompanhamentos você gostaria?';
                         nextState = 'COLLECT_ACAI_TOPPINGS';
-                    } else {
+                    } else if (currentOrder.currentItemType === 'Sorvete' && currentOrder.currentItemBase === 'de Massa') {
+                        botResponse = 'Voltando para a seleção do tipo de sorvete de massa. Qual tipo de sorvete de massa você gostaria?';
+                        options = ['Tradicional', 'Especial', 'Trufado', 'Voltar para Base de Sorvete'];
+                        nextState = 'SELECT_ICE_CREAM_MASS_TYPE';
+                    }
+                    else {
                         botResponse = `Voltando para escolher o sabor de ${currentOrder.currentItemType}. Qual sabor você gostaria?`;
                         if (currentOrder.currentItemType === 'Sorvete') {
                             options = (currentOrder.currentItemBase === 'Leite') ? ['Chocolate', 'Creme', 'Flocos'] : ['Morango', 'Pistache', 'Limão'];
                         } else if (currentOrder.currentItemType === 'Picolé') {
                             options = (currentOrder.currentItemBase === 'Leite') ? ['Abacaxi Suíço', 'Amendoim', 'Banana', 'Baunilha', 'Blue Ice', 'Bombom', 'Chiclete', 'Chocolate', 'Chocomenta', 'Coco Queimado', 'Chocolate Branco', 'Coco', 'Cookies', 'Flocos', 'Ice Ninho', 'Leite Condensado', 'Limão Suíço', 'Milho', 'Mousse de Maracujá', 'Morango'] : ['Abacaxi', 'Açaí', 'Groselha', 'Limão', 'Manga', 'Maracujá', 'Melancia', 'Pinta Língua', 'Tangerina', 'Kiwi', 'Uva'];
                         } else if (currentOrder.currentItemType === 'Milkshake') {
-                            options = ['Chocolate', 'Morango', 'Ovomaltine'];
+                            options = ['Baunilha', 'Morango', 'Chocolate', 'Oreo', 'Paçoca', 'Ovomaltine'];
                         }
                         nextState = 'SELECT_FLAVOR';
                     }
@@ -268,51 +324,98 @@
                     botResponse = 'Voltando para a coleta do telefone. Qual é o seu número de telefone para contato?';
                     nextState = 'COLLECT_PHONE';
                     return { botResponse, nextState, options };
+                } else if (userText === 'Voltar para Confirmação do Pedido') {
+                    botResponse = 'Voltando para a confirmação do pedido. Deseja confirmar ou fazer alguma alteração?';
+                    options = ['Confirmar Pedido', 'Editar Pedido', 'Cancelar Pedido', 'Voltar para Coletar Telefone'];
+                    nextState = 'ORDER_CONFIRMATION_ACTION';
+                    return { botResponse, nextState, options };
+                } else if (userText === 'Voltar para Forma de Pagamento') {
+                    botResponse = `Qual a forma de pagamento?`;
+                    options = ['Pix', 'Débito', 'Crédito', 'Dinheiro', 'Voltar para Confirmação do Pedido'];
+                    nextState = 'SELECT_PAYMENT_METHOD';
+                    return { botResponse, nextState, options };
+                } else if (userText === 'Voltar para Tipo de Sorvete de Massa') {
+                    botResponse = 'Voltando para a seleção do tipo de sorvete de massa. Qual tipo de sorvete de massa você gostaria?';
+                    options = ['Tradicional', 'Especial', 'Trufado', 'Voltar para Base de Sorvete'];
+                    nextState = 'SELECT_ICE_CREAM_MASS_TYPE';
+                    return { botResponse, nextState, options };
+                }
+
+                // --- LLM-powered features ---
+                if (userText.toLowerCase().startsWith('descreva ') || userText.toLowerCase().startsWith('o que é ')) {
+                    const itemToDescribe = userText.toLowerCase().replace('descreva ', '').replace('o que é ', '').trim();
+                    const llmDescription = await callGeminiLLM(`Crie uma descrição curta e apetitosa para o sabor/item "${itemToDescribe}" da Delicias GELADA'S.`);
+                    botResponse = `${llmDescription}\n\nPosso ajudar com mais alguma coisa?`;
+                    options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
+                    nextState = 'SELECT_ACTION';
+                    return { botResponse, nextState, options };
+                } else if (userText === 'Quero uma Sugestão ✨') {
+                    const llmSuggestion = await callGeminiLLM('Sugira uma combinação criativa de sorvete, picolé ou açaí da Delicias GELADA\'S para alguém que busca algo delicioso. Inclua sabor, base (se aplicável) e 1-2 acompanhamentos.');
+                    botResponse = `Que tal isso? ${llmSuggestion}\n\nGostaria de pedir isso ou outra sugestão?`;
+                    options = ['Pedir Sugestão', 'Outra Sugestão', 'Voltar ao Início'];
+                    nextState = 'SUGGEST_ORDER_ACTION';
+                    return { botResponse, nextState, options };
                 }
 
                 switch (state) {
                     case 'START':
                         botResponse = 'Olá! Bem-vindo(a) à Delicias GELADA\'S. O que você gostaria de fazer?';
-                        options = ['Fazer um Pedido'];
+                        options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
                         nextState = 'SELECT_ACTION';
                         break;
 
                     case 'SELECT_ACTION':
                         if (userText === 'Fazer um Pedido') {
                             botResponse = 'Ótimo! O que você gostaria de pedir?';
-                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
+                            options = ['Sorvete de Massa', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
                             nextState = 'SELECT_PRODUCT_TYPE';
-                        } else {
-                            botResponse = 'Desculpe, não entendi. Por favor, escolha "Fazer um Pedido".';
-                            options = ['Fazer um Pedido'];
+                        } else { // Removed 'Calcular Frete' case
+                            botResponse = 'Desculpe, não entendi. Por favor, escolha uma das opções.';
+                            options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
                             nextState = 'SELECT_ACTION';
                         }
                         break;
 
+                    case 'SUGGEST_ORDER_ACTION':
+                        if (userText === 'Pedir Sugestão') {
+                            botResponse = 'Ótimo! Para prosseguir com essa sugestão, por favor, me diga o nome do produto principal (ex: "Sorvete", "Picolé", "Açaí") e o sabor/combinação para que eu possa adicioná-lo ao seu pedido.';
+                            nextState = 'SELECT_PRODUCT_TYPE'; // User will manually input the suggested item
+                        } else if (userText === 'Outra Sugestão') {
+                            const llmSuggestion = await callGeminiLLM('Sugira outra combinação criativa de sorvete, picolé ou açaí da Delicias GELADA\'S para alguém que busca algo delicioso. Inclua sabor, base (se aplicável) e 1-2 acompanhamentos.');
+                            botResponse = `Que tal esta? ${llmSuggestion}\n\nGostaria de pedir isso ou outra sugestão?`;
+                            options = ['Pedir Sugestão', 'Outra Sugestão', 'Voltar ao Início'];
+                            nextState = 'SUGGEST_ORDER_ACTION';
+                        } else {
+                            botResponse = 'Por favor, escolha uma das opções.';
+                            options = ['Pedir Sugestão', 'Outra Sugestão', 'Voltar ao Início'];
+                            nextState = 'SUGGEST_ORDER_ACTION';
+                        }
+                        break;
+
                     case 'SELECT_PRODUCT_TYPE':
-                        if (userText === 'Sorvete') {
-                            botResponse = 'Qual tipo de sorvete você gostaria?';
-                            options = ['Leite', 'Fruta', 'Voltar para Tipo de Produto'];
-                            nextState = 'SELECT_ICE_CREAM_BASE';
-                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset all item-related states
+                        if (userText === 'Sorvete de Massa') {
+                            botResponse = 'Qual tipo de sorvete de massa você gostaria?';
+                            options = ['Tradicional', 'Especial', 'Trufado', 'Voltar para Tipo de Produto'];
+                            nextState = 'SELECT_ICE_CREAM_MASS_TYPE';
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: 'Sorvete', currentItemBase: 'de Massa', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, tempSelectedToppings: [] })); // Reset all item-related states
                         } else if (userText === 'Picolé') {
                             botResponse = 'Qual tipo de picolé você gostaria?';
                             options = ['Leite', 'Fruta', 'Voltar para Tipo de Produto'];
                             nextState = 'SELECT_POPSICLE_BASE';
-                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset all item-related states
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, tempSelectedToppings: [] })); // Reset all item-related states
                         } else if (userText === 'Açaí') {
                             botResponse = 'Você gostaria de açaí em Copo ou Caixa?';
                             options = ['Copo', 'Caixa', 'Voltar para Tipo de Produto'];
                             nextState = 'SELECT_ACAI_CONTAINER';
-                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset all item-related states
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, tempSelectedToppings: [] })); // Reset all item-related states
                         } else if (userText === 'Milkshake') {
                             botResponse = 'Qual sabor de milkshake você gostaria?';
-                            options = ['Chocolate', 'Morango', 'Ovomaltine', 'Voltar para Tipo de Produto'];
+                            options = ['Baunilha', 'Morango', 'Chocolate', 'Oreo', 'Paçoca', 'Ovomaltine', 'Voltar para Tipo de Produto'];
                             nextState = 'SELECT_FLAVOR';
-                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset all item-related states
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: userText, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, tempSelectedToppings: [] })); // Reset all item-related states
                         } else {
                             botResponse = 'Por favor, escolha um tipo de produto válido.';
-                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
+                            options = ['Sorvete de Massa', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
                             nextState = 'SELECT_PRODUCT_TYPE';
                         }
                         break;
@@ -328,10 +431,40 @@
                             botResponse = 'Qual sabor de sorvete de fruta você gostaria?';
                             options = ['Morango', 'Pistache', 'Limão', 'Voltar para Base de Sorvete'];
                             nextState = 'SELECT_FLAVOR';
-                        } else {
-                            botResponse = 'Por favor, escolha um tipo válido (Leite ou Fruta).';
-                            options = ['Leite', 'Fruta', 'Voltar para Tipo de Produto'];
+                        } else if (userText === 'de Massa') {
+                            setCurrentOrder(prev => ({ ...prev, currentItemBase: userText }));
+                            botResponse = 'Qual tipo de sorvete de massa você gostaria?';
+                            options = ['Tradicional', 'Especial', 'Trufado', 'Voltar para Base de Sorvete'];
+                            nextState = 'SELECT_ICE_CREAM_MASS_TYPE';
+                        }
+                        else {
+                            botResponse = 'Por favor, escolha um tipo válido (Leite, Fruta ou de Massa).';
+                            options = ['Leite', 'Fruta', 'de Massa', 'Voltar para Tipo de Produto'];
                             nextState = 'SELECT_ICE_CREAM_BASE';
+                        }
+                        break;
+
+                    case 'SELECT_ICE_CREAM_MASS_TYPE':
+                        if (userText === 'Tradicional') {
+                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `de Massa ${userText}`, currentItemPrice: 14.00 }));
+                            botResponse = `Qual sabor de sorvete de massa ${userText} você gostaria?`;
+                            options = ['Chocolate', 'Creme', 'Morango', 'Voltar para Tipo de Sorvete de Massa'];
+                            nextState = 'SELECT_FLAVOR';
+                        } else if (userText === 'Especial') {
+                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `de Massa ${userText}`, currentItemPrice: 15.00 }));
+                            botResponse = `Qual sabor de sorvete de massa ${userText} você gostaria?`;
+                            options = ['Flocos', 'Galak', 'Sensação', 'Chocomenta', 'Voltar para Tipo de Sorvete de Massa'];
+                            nextState = 'SELECT_FLAVOR';
+                        }
+                        else if (userText === 'Trufado') {
+                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `de Massa ${userText}`, currentItemPrice: 16.00 }));
+                            botResponse = `Qual sabor de sorvete de massa ${userText} você gostaria?`;
+                            options = ['Ninho Trufado', 'Abacaxi ao Vinho', 'Iogurte Frutas Vermelhas', 'Torta de Limão', 'Voltar para Tipo de Sorvete de Massa'];
+                            nextState = 'SELECT_FLAVOR';
+                        } else {
+                            botResponse = 'Por favor, escolha um tipo válido (Tradicional, Especial ou Trufado).';
+                            options = ['Tradicional', 'Especial', 'Trufado', 'Voltar para Base de Sorvete'];
+                            nextState = 'SELECT_ICE_CREAM_MASS_TYPE';
                         }
                         break;
 
@@ -355,14 +488,15 @@
 
                     case 'SELECT_ACAI_CONTAINER':
                         if (userText === 'Copo') {
-                            setCurrentOrder(prev => ({ ...prev, currentItemContainer: userText }));
+                            setCurrentOrder(prev => ({ ...prev, currentItemContainer: userText, tempSelectedToppings: [] })); // Reset temp toppings
                             botResponse = 'Qual tamanho de açaí em Copo você gostaria?';
                             options = ['300ml - R$ 7,00', '500ml - R$ 10,00', '770ml - R$ 13,00', 'Voltar para Embalagem de Açaí'];
                             nextState = 'SELECT_ACAI_SIZE';
                         } else if (userText === 'Caixa') {
-                            setCurrentOrder(prev => ({ ...prev, currentItemContainer: userText, currentItemFlavor: `${userText}` })); // Set flavor for Caixa directly
-                            botResponse = `Ótimo! Quais acompanhamentos você gostaria no seu açaí em ${userText}? (Você pode digitar livremente aqui, por exemplo: granola, leite condensado, frutas, mel)\n\nDisponíveis:\n${acaiToppings.map(t => `- ${t.name} R$ ${t.price}`).join('\n')}\n\nVocê pode digitar "Nenhum" se não quiser acompanhamentos.`;
-                            nextState = 'COLLECT_ACAI_TOPPINGS';
+                            setCurrentOrder(prev => ({ ...prev, currentItemContainer: userText, currentItemFlavor: `${userText}`, currentItemPrice: 0 })); // Set flavor for Caixa directly and reset price
+                            botResponse = `Qual tamanho de açaí em Caixa você gostaria?`;
+                            options = ['2 litros - R$ 28,00', '5 litros - R$ 60,00', '10 litros - R$ 100,00', 'Voltar para Embalagem de Açaí'];
+                            nextState = 'SELECT_ACAI_BOX_SIZE'; // New state for box size selection
                         } else {
                             botResponse = 'Por favor, escolha "Copo" ou "Caixa".';
                             options = ['Copo', 'Caixa', 'Voltar para Tipo de Produto'];
@@ -374,20 +508,37 @@
                         const validAcaiSizes = ['300ml - R$ 7,00', '500ml - R$ 10,00', '770ml - R$ 13,00'];
                         if (validAcaiSizes.includes(userText)) {
                             const basePrice = getPriceFromString(userText);
-                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `${currentOrder.currentItemContainer} ${userText}`, currentItemPrice: basePrice })); // Set base flavor with container and size, and its price
+                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `${currentOrder.currentItemContainer} ${userText}`, currentItemPrice: basePrice, currentItemTotalPrice: basePrice, tempSelectedToppings: [] })); // Set base flavor with container and size, and its price, and total price for cup
                             
-                            let toppingsListText = 'Ótimo! Quais acompanhamentos você gostaria? (Digite um ou mais, separados por vírgula)\n\nDisponíveis:\n';
+                            let toppingsListText = 'Ótimo! Quais acompanhamentos você gostaria? Selecione um por vez.\n\nDisponíveis:\n';
                             acaiToppings.forEach(topping => {
                                 toppingsListText += `- ${topping.name} R$ ${topping.price}\n`;
                             });
-                            toppingsListText += '\nVocê pode digitar "Nenhum" se não quiser acompanhamentos.';
+                            toppingsListText += '\nQuando terminar, clique em "Finalizar Acompanhamentos" ou "Nenhum" se não quiser.';
 
                             botResponse = toppingsListText;
+                            options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
                             nextState = 'COLLECT_ACAI_TOPPINGS';
                         } else {
                             botResponse = 'Por favor, escolha um tamanho válido.';
                             options = ['300ml - R$ 7,00', '500ml - R$ 10,00', '770ml - R$ 13,00', 'Voltar para Embalagem de Açaí'];
                             nextState = 'SELECT_ACAI_SIZE';
+                        }
+                        break;
+
+                    case 'SELECT_ACAI_BOX_SIZE': // New state for açaí box sizes
+                        const validAcaiBoxSizes = ['2 litros - R$ 28,00', '5 litros - R$ 60,00', '10 litros - R$ 100,00'];
+                        if (validAcaiBoxSizes.includes(userText)) {
+                            const basePrice = getPriceFromString(userText);
+                            setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `${currentOrder.currentItemContainer} ${userText}`, currentItemPrice: basePrice, currentItemTotalPrice: basePrice })); // Set flavor and price, and total price for box
+                            
+                            botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} custará R$ ${basePrice.toFixed(2).replace('.', ',')}. Confirma?`;
+                            options = ['Sim', 'Não', 'Voltar para Tamanho da Caixa de Açaí'];
+                            nextState = 'CONFIRM_ACAI_FINAL_ITEM'; // Reusing CONFIRM_ACAI_FINAL_ITEM for box sizes
+                        } else {
+                            botResponse = 'Por favor, escolha um tamanho de caixa válido.';
+                            options = ['2 litros - R$ 28,00', '5 litros - R$ 60,00', '10 litros - R$ 100,00', 'Voltar para Embalagem de Açaí'];
+                            nextState = 'SELECT_ACAI_BOX_SIZE';
                         }
                         break;
                     
@@ -398,6 +549,14 @@
                                 validFlavors = ['Chocolate', 'Creme', 'Flocos'];
                             } else if (currentOrder.currentItemBase === 'Fruta') {
                                 validFlavors = ['Morango', 'Pistache', 'Limão'];
+                            } else if (currentOrder.currentItemBase === 'de Massa') {
+                                if (currentOrder.currentItemPrice === 14.00) { // Tradicional
+                                    validFlavors = ['Chocolate', 'Creme', 'Morango'];
+                                } else if (currentOrder.currentItemPrice === 15.00) { // Especial
+                                    validFlavors = ['Flocos', 'Galak', 'Sensação', 'Chocomenta'];
+                                } else if (currentOrder.currentItemPrice === 16.00) { // Trufado
+                                    validFlavors = ['Ninho Trufado', 'Abacaxi ao Vinho', 'Iogurte Frutas Vermelhas', 'Torta de Limão'];
+                                }
                             }
                         } else if (currentOrder.currentItemType === 'Picolé') {
                             if (currentOrder.currentItemBase === 'Leite') {
@@ -406,7 +565,7 @@
                                 validFlavors = ['Abacaxi', 'Açaí', 'Groselha', 'Limão', 'Manga', 'Maracujá', 'Melancia', 'Pinta Língua', 'Tangerina', 'Kiwi', 'Uva'];
                             }
                         } else if (currentOrder.currentItemType === 'Milkshake') {
-                            validFlavors = ['Chocolate', 'Morango', 'Ovomaltine'];
+                            validFlavors = ['Baunilha', 'Morango', 'Chocolate', 'Oreo', 'Paçoca', 'Ovomaltine'];
                         }
 
                         if (validFlavors.includes(userText)) {
@@ -416,7 +575,11 @@
                         } else {
                             let backOption = '';
                             if (currentOrder.currentItemType === 'Sorvete') {
-                                backOption = 'Voltar para Base de Sorvete';
+                                if (currentOrder.currentItemBase === 'de Massa') {
+                                    backOption = 'Voltar para Tipo de Sorvete de Massa';
+                                } else {
+                                    backOption = 'Voltar para Base de Sorvete';
+                                }
                             } else if (currentOrder.currentItemType === 'Picolé') {
                                 backOption = 'Voltar para Base de Picolé';
                             } else if (currentOrder.currentItemType === 'Açaí') {
@@ -430,26 +593,54 @@
                         }
                         break;
 
-                    case 'COLLECT_ACAI_TOPPINGS':
-                        const rawToppings = userText.toLowerCase().trim();
-                        const selectedToppingsText = rawToppings === 'nenhum' ? 'sem acompanhamentos' : `com ${rawToppings}`;
-                        const toppingsCost = rawToppings === 'nenhum' ? 0 : calculateToppingsPrice(rawToppings, acaiToppings);
-                        
-                        const currentItemTotal = currentOrder.currentItemPrice + toppingsCost;
+                    case 'COLLECT_ACAI_TOPPINGS': // This state now handles button clicks for toppings
+                        if (userText === 'Finalizar Acompanhamentos') {
+                            const selectedToppingsText = currentOrder.tempSelectedToppings.length > 0 ? `com ${currentOrder.tempSelectedToppings.join(', ')}` : 'sem acompanhamentos';
+                            const toppingsCost = calculateToppingsPrice(currentOrder.tempSelectedToppings, acaiToppings);
+                            const currentItemTotal = currentOrder.currentItemPrice + toppingsCost;
 
-                        setCurrentOrder(prev => ({
-                            ...prev,
-                            currentItemToppings: selectedToppingsText,
-                            currentItemToppingsPrice: toppingsCost,
-                            currentItemTotalPrice: currentItemTotal,
-                        }));
+                            setCurrentOrder(prev => ({
+                                ...prev,
+                                currentItemToppings: selectedToppingsText,
+                                currentItemToppingsPrice: toppingsCost,
+                                currentItemTotalPrice: currentItemTotal,
+                                // tempSelectedToppings is cleared when new item starts
+                            }));
 
-                        botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} ${selectedToppingsText} custará R$ ${currentItemTotal.toFixed(2).replace('.', ',')}. Confirma?`;
-                        options = ['Sim', 'Não', 'Voltar para Acompanhamentos do Açaí'];
-                        nextState = 'CONFIRM_ACAI_FINAL_ITEM';
+                            botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} ${selectedToppingsText} custará R$ ${currentItemTotal.toFixed(2).replace('.', ',')}. Confirma?`;
+                            options = ['Sim', 'Não', 'Voltar para Acompanhamentos do Açaí'];
+                            nextState = 'CONFIRM_ACAI_FINAL_ITEM';
+                        } else if (userText === 'Nenhum') {
+                            const currentItemTotal = currentOrder.currentItemPrice; // No toppings cost
+                            setCurrentOrder(prev => ({
+                                ...prev,
+                                currentItemToppings: 'sem acompanhamentos',
+                                currentItemToppingsPrice: 0,
+                                currentItemTotalPrice: currentItemTotal,
+                                tempSelectedToppings: [],
+                            }));
+                            botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} sem acompanhamentos custará R$ ${currentItemTotal.toFixed(2).replace('.', ',')}. Confirma?`;
+                            options = ['Sim', 'Não', 'Voltar para Acompanhamentos do Açaí'];
+                            nextState = 'CONFIRM_ACAI_FINAL_ITEM';
+                        } else if (acaiToppings.map(t => t.name).includes(userText)) {
+                            // Add selected topping to temporary list
+                            setCurrentOrder(prev => ({
+                                ...prev,
+                                tempSelectedToppings: [...prev.tempSelectedToppings, userText],
+                            }));
+                            botResponse = `"${userText}" adicionado. Selecione mais acompanhamentos ou "Finalizar Acompanhamentos".`;
+                            // Filter out already selected toppings from options
+                            const remainingToppings = acaiToppings.filter(t => !currentOrder.tempSelectedToppings.includes(t.name));
+                            options = remainingToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']); // Re-present options
+                            nextState = 'COLLECT_ACAI_TOPPINGS'; // Stay in this state
+                        } else {
+                            botResponse = 'Opção inválida. Por favor, selecione um acompanhamento ou "Finalizar Acompanhamentos".';
+                            options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
+                            nextState = 'COLLECT_ACAI_TOPPINGS';
+                        }
                         break;
 
-                    case 'CONFIRM_ACAI_FINAL_ITEM':
+                    case 'CONFIRM_ACAI_FINAL_ITEM': // This state is used for both cup and box açaí confirmation
                         if (userText === 'Sim') {
                             botResponse = `Quantos açaís ${currentOrder.currentItemFlavor} ${currentOrder.currentItemToppings} você gostaria? (Digite a quantidade)`;
                             nextState = 'SELECT_QUANTITY';
@@ -466,18 +657,21 @@
 
                     case 'REVISE_ACAI_ITEM':
                         if (userText === 'Mudar acompanhamentos') {
-                            let toppingsListText = 'Quais acompanhamentos você gostaria? (Digite um ou mais, separados por vírgula)\n\nDisponíveis:\n';
+                            // Reset tempSelectedToppings when coming back to this state
+                            setCurrentOrder(prev => ({ ...prev, tempSelectedToppings: [] }));
+                            let toppingsListText = 'Quais acompanhamentos você gostaria? (Selecione um por vez)\n\nDisponíveis:\n';
                             acaiToppings.forEach(topping => {
                                 toppingsListText += `- ${topping.name} R$ ${topping.price}\n`;
                             });
-                            toppingsListText += '\nVocê pode digitar "Nenhum" se não quiser acompanhamentos.';
+                            toppingsListText += '\nQuando terminar, clique em "Finalizar Acompanhamentos" ou "Nenhum" se não quiser.';
                             botResponse = toppingsListText;
+                            options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
                             nextState = 'COLLECT_ACAI_TOPPINGS';
                         } else if (userText === 'Recomeçar açaí') {
                             botResponse = 'Certo, vamos recomeçar a escolha do açaí. Você gostaria de açaí em Copo ou Caixa?';
                             options = ['Copo', 'Caixa', 'Voltar para Tipo de Produto'];
                             nextState = 'SELECT_ACAI_CONTAINER';
-                            setCurrentOrder(prev => ({ ...prev, currentItemType: 'Açaí', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset açaí-related states
+                            setCurrentOrder(prev => ({ ...prev, currentItemType: 'Açaí', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, tempSelectedToppings: [] })); // Reset açaí-related states
                         } else {
                             botResponse = 'Por favor, escolha uma das opções.';
                             options = ['Mudar acompanhamentos', 'Recomeçar açaí', 'Voltar para Embalagem de Açaí'];
@@ -493,6 +687,8 @@
                                 unitPrice = getPopsicleUnitPrice(quantity);
                             } else if (currentOrder.currentItemType === 'Açaí') {
                                 unitPrice = currentOrder.currentItemTotalPrice; // Açaí total price already calculated with toppings
+                            } else if (currentOrder.currentItemType === 'Sorvete' && currentOrder.currentItemBase === 'de Massa') {
+                                unitPrice = currentOrder.currentItemPrice; // Use the price set for Tradicional, Especial, Trufado
                             }
                             // For other items like Sorvete/Milkshake, you would define their unit prices here if needed
                             // For now, they don't have specific pricing logic like açaí or popsicles.
@@ -515,6 +711,7 @@
                                 currentItemToppingsPrice: 0,
                                 currentItemTotalPrice: 0,
                                 currentItemQuantity: 0,
+                                tempSelectedToppings: [], // Reset temp toppings
                             }));
                             botResponse = 'Item adicionado! Deseja adicionar mais itens ao seu pedido?';
                             options = ['Sim', 'Não', 'Voltar para Adicionar Itens'];
@@ -528,7 +725,7 @@
                     case 'ADD_MORE_ITEMS':
                         if (userText === 'Sim') {
                             botResponse = 'O que mais você gostaria de pedir?';
-                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
+                            options = ['Sorvete de Massa', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
                             nextState = 'SELECT_PRODUCT_TYPE';
                         } else if (userText === 'Não') {
                             botResponse = 'Certo. Qual é o seu nome completo?';
@@ -549,10 +746,11 @@
 
                     case 'COLLECT_DELIVERY_OPTION':
                         if (userText === 'Entrega') {
+                            setCurrentOrder(prev => ({ ...prev, isDeliverySelected: true })); // Set delivery flag
                             botResponse = 'Por favor, informe o endereço completo para entrega.';
-                            nextState = 'COLLECT_ADDRESS';
+                            nextState = 'COLLECT_DELIVERY_ADDRESS'; // New state for address input
                         } else if (userText === 'Retirada na Loja') {
-                            setCurrentOrder(prev => ({ ...prev, deliveryAddress: 'Retirada na Loja' }));
+                            setCurrentOrder(prev => ({ ...prev, deliveryAddress: 'Retirada na Loja', isDeliverySelected: false })); // Clear delivery flag
                             botResponse = 'Qual é o seu número de telefone para contato?';
                             nextState = 'COLLECT_PHONE';
                         } else {
@@ -562,19 +760,81 @@
                         }
                         break;
 
-                    case 'COLLECT_ADDRESS':
+                    case 'COLLECT_DELIVERY_ADDRESS': // New state to collect address
                         setCurrentOrder(prev => ({ ...prev, deliveryAddress: userText }));
                         botResponse = 'Qual é o seu número de telefone para contato?';
+                        options = ['Voltar para Opção de Entrega']; // Option to go back to delivery choice
                         nextState = 'COLLECT_PHONE';
                         break;
 
                     case 'COLLECT_PHONE':
-                        setCurrentOrder(prev => ({ ...prev, phoneNumber: userText, isOrderComplete: true }));
-                        botResponse = 'Ótimo! Seu pedido está pronto. Por favor, revise e clique no botão abaixo para enviar via WhatsApp.';
-                        nextState = 'ORDER_CONFIRMATION';
+                        // Validate if input is purely numeric and has between 9 and 12 digits
+                        const phoneNumber = userText.trim();
+                        if (/^\d{9,12}$/.test(phoneNumber)) { // Regex to check for 9 to 12 digits
+                            // Calculate subtotal before asking for payment method
+                            const subtotal = currentOrder.items.reduce((acc, item) => acc + (item.quantidade * (item.precoUnitario || 0)), 0);
+                            setCurrentOrder(prev => ({ ...prev, phoneNumber: phoneNumber, finalOrderTotal: subtotal }));
+
+                            botResponse = `Qual a forma de pagamento?`;
+                            options = ['Pix', 'Débito', 'Crédito', 'Dinheiro', 'Voltar para Coletar Telefone'];
+                            nextState = 'SELECT_PAYMENT_METHOD';
+                        } else {
+                            botResponse = 'Por favor, digite um número de telefone válido, contendo apenas dígitos (mínimo 9, máximo 12).';
+                            nextState = 'COLLECT_PHONE'; // Stay in the same state to re-collect input
+                        }
                         break;
                     
-                    case 'ORDER_CONFIRMATION':
+                    case 'SELECT_PAYMENT_METHOD':
+                        let paymentFee = 0;
+                        let paymentDetails = '';
+                        let finalTotal = currentOrder.finalOrderTotal;
+
+                        if (userText === 'Débito') {
+                            paymentFee = currentOrder.finalOrderTotal * 0.02;
+                            finalTotal += paymentFee;
+                            paymentDetails = ` (acréscimo de 2% pela taxa da máquina do cartão)`;
+                        } else if (userText === 'Crédito') {
+                            paymentFee = currentOrder.finalOrderTotal * 0.06;
+                            finalTotal += paymentFee;
+                            paymentDetails = ` (acréscimo de 6% pela taxa da máquina do cartão)`;
+                        } else if (!['Pix', 'Dinheiro'].includes(userText)) {
+                            botResponse = 'Por favor, escolha uma forma de pagamento válida.';
+                            options = ['Pix', 'Débito', 'Crédito', 'Dinheiro', 'Voltar para Coletar Telefone']; // Changed back option
+                            nextState = 'SELECT_PAYMENT_METHOD';
+                            return { botResponse, nextState, options };
+                        }
+
+                        setCurrentOrder(prev => ({
+                            ...prev,
+                            paymentMethod: userText,
+                            finalOrderTotal: finalTotal,
+                            isOrderComplete: true, // Order is now complete after payment method selection
+                        }));
+
+                        botResponse = `Confirmado: Forma de pagamento ${userText}. O valor total do seu pedido será de R$ ${finalTotal.toFixed(2).replace('.', ',')}${paymentDetails}. Confirma o valor e forma de pagamento?`;
+                        options = ['Sim, confirmar pagamento', 'Não, escolher outra forma', 'Voltar para Coletar Telefone']; // Changed back option
+                        nextState = 'CONFIRM_FINAL_PAYMENT';
+                        break;
+
+                    case 'CONFIRM_FINAL_PAYMENT':
+                        if (userText === 'Sim, confirmar pagamento') {
+                            botResponse = 'Ótimo! Seu pedido está pronto para ser enviado. Clique no botão abaixo para finalizar.';
+                            nextState = 'ORDER_CONFIRMATION'; // Now this is the final display state
+                        } else if (userText === 'Não, escolher outra forma') {
+                            botResponse = `Qual a forma de pagamento?`;
+                            options = ['Pix', 'Débito', 'Crédito', 'Dinheiro', 'Voltar para Coletar Telefone']; // Changed back option
+                            nextState = 'SELECT_PAYMENT_METHOD';
+                        } else if (userText === 'Voltar para Coletar Telefone') { // New back option
+                            botResponse = 'Voltando para a coleta do telefone. Qual é o seu número de telefone para contato?';
+                            nextState = 'COLLECT_PHONE';
+                        } else {
+                            botResponse = 'Desculpe, não entendi. Por favor, escolha uma das opções.';
+                            options = ['Sim, confirmar pagamento', 'Não, escolher outra forma', 'Voltar para Coletar Telefone'];
+                            nextState = 'CONFIRM_FINAL_PAYMENT';
+                        }
+                        break;
+
+                    case 'ORDER_CONFIRMATION': // This state is now just for final display before sending
                         botResponse = 'Seu pedido está pronto. Deseja confirmar ou fazer alguma alteração?';
                         options = ['Confirmar Pedido', 'Editar Pedido', 'Cancelar Pedido', 'Voltar para Coletar Telefone'];
                         nextState = 'ORDER_CONFIRMATION_ACTION';
@@ -586,14 +846,14 @@
                             nextState = 'ORDER_CONFIRMATION';
                         } else if (userText === 'Editar Pedido') {
                             botResponse = 'Certo, vamos editar o pedido. O que você gostaria de mudar ou adicionar?';
-                            setCurrentOrder(prev => ({ ...prev, items: [], isOrderComplete: false, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0 })); // Reset all item-related states
-                            options = ['Sorvete', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
+                            setCurrentOrder(prev => ({ ...prev, items: [], isOrderComplete: false, currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, paymentMethod: '', finalOrderTotal: 0, isDeliverySelected: false, tempSelectedToppings: [] })); // Reset all item-related states
+                            options = ['Sorvete de Massa', 'Picolé', 'Açaí', 'Milkshake', 'Voltar ao Início'];
                             nextState = 'SELECT_PRODUCT_TYPE';
                         } else if (userText === 'Cancelar Pedido') {
                             botResponse = 'Pedido cancelado. Posso ajudar com mais alguma coisa?';
                             setCurrentOrder({
                                 items: [], customerName: '', deliveryAddress: '', phoneNumber: '', isOrderComplete: false,
-                                currentItemType: '', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemQuantity: 0, currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0,
+                                currentItemType: '', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemQuantity: 0, currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, paymentMethod: '', finalOrderTotal: 0, isDeliverySelected: false, tempSelectedToppings: [],
                             });
                             options = ['Fazer um Pedido'];
                             nextState = 'SELECT_ACTION';
@@ -606,7 +866,7 @@
 
                     default:
                         botResponse = 'Desculpe, algo deu errado. Vamos começar de novo.';
-                        options = ['Fazer um Pedido'];
+                        options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
                         nextState = 'SELECT_ACTION';
                         break;
                 }
@@ -646,12 +906,10 @@
                 let orderSummaryText = `Olá, Delicias GELADA'S!\n\n`;
                 orderSummaryText += `Gostaria de fazer o seguinte pedido:\n`;
 
-                let totalOrderPrice = 0;
                 currentOrder.items.forEach((item, index) => {
                     let itemDescription = `• ${item.quantidade}x ${item.produto} ${item.sabor}`;
                     if (item.precoUnitario) {
                         itemDescription += ` (R$ ${item.precoUnitario.toFixed(2).replace('.', ',')}/un)`;
-                        totalOrderPrice += item.quantidade * item.precoUnitario;
                     }
                     orderSummaryText += `${itemDescription}\n`;
                 });
@@ -660,8 +918,20 @@
                 orderSummaryText += `Nome: ${currentOrder.customerName}\n`;
                 orderSummaryText += `Endereço: ${currentOrder.deliveryAddress}\n`;
                 orderSummaryText += `Telefone: ${currentOrder.phoneNumber}\n`;
-                orderSummaryText += `\n`;
-                orderSummaryText += `*Total do Pedido: R$ ${totalOrderPrice.toFixed(2).replace('.', ',')}*\n`;
+                
+                if (currentOrder.isDeliverySelected && currentOrder.deliveryAddress !== 'Retirada na Loja') {
+                    orderSummaryText += `**Frete a verificar.**\n`;
+                }
+
+                orderSummaryText += `\n*Forma de Pagamento:* ${currentOrder.paymentMethod}\n`;
+                
+                let paymentFeeText = '';
+                if (currentOrder.paymentMethod === 'Débito') {
+                    paymentFeeText = ` (acréscimo de 2% pela taxa da máquina do cartão)`;
+                } else if (currentOrder.paymentMethod === 'Crédito') {
+                    paymentFeeText = ` (acréscimo de 6% pela taxa da máquina do cartão)`;
+                }
+                orderSummaryText += `*Total do Pedido: R$ ${currentOrder.finalOrderTotal.toFixed(2).replace('.', ',')}*${paymentFeeText}\n`;
                 orderSummaryText += `\nObrigado!`;
 
                 // For WhatsApp, replace newlines with %0A
@@ -671,7 +941,7 @@
                 // Reset order and conversation state after sending
                 setCurrentOrder({
                     items: [], customerName: '', deliveryAddress: '', phoneNumber: '', isOrderComplete: false,
-                    currentItemType: '', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemQuantity: 0, currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0,
+                    currentItemType: '', currentItemBase: '', currentItemContainer: '', currentItemFlavor: '', currentItemQuantity: 0, currentItemPrice: 0, currentItemToppings: '', currentItemToppingsPrice: 0, currentItemTotalPrice: 0, paymentMethod: '', finalOrderTotal: 0, isDeliverySelected: false, tempSelectedToppings: [],
                 });
                 setMessages([]); // Clear chat history for a fresh start
                 setConversationState('START'); // Reset to start for a new order
@@ -683,13 +953,13 @@
                 }, 1000); // Small delay to allow WhatsApp redirect
             };
             
-            const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0 && conversationState !== 'COLLECT_ACAI_TOPPINGS' && conversationState !== 'SELECT_QUANTITY' && conversationState !== 'COLLECT_NAME' && conversationState !== 'COLLECT_ADDRESS' && conversationState !== 'COLLECT_PHONE') || currentOrder.isOrderComplete;
+            const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0 && conversationState !== 'COLLECT_ACAI_TOPPINGS' && conversationState !== 'SELECT_QUANTITY' && conversationState !== 'COLLECT_NAME' && conversationState !== 'COLLECT_DELIVERY_ADDRESS' && conversationState !== 'COLLECT_PHONE' && conversationState !== 'SUGGEST_ORDER_ACTION') || currentOrder.isOrderComplete;
 
             return (
                 <div className="flex flex-col h-screen antialiased text-gray-800">
-                    <header className="bg-whatsapp-green text-white p-4 flex items-center justify-between shadow-lg rounded-b-2xl">
+                    <header className="bg-[#4A574F] text-white p-4 flex items-center justify-between shadow-lg rounded-b-2xl">
                         <div className="flex items-center">
-                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4 overflow-hidden border-2 border-green-300 shadow-md">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-4 overflow-hidden border-2 border-[#A5D6A7] shadow-md">
                                 <img
                                     alt="Delicias GELADA'S Logo"
                                     className="w-full h-full object-cover"
@@ -699,7 +969,7 @@
                             </div>
                             <div>
                                 <h1 className="text-xl font-bold">Delicias GELADA'S</h1>
-                                <p className="text-xs text-green-200">Online</p>
+                                <p className="text-xs text-[#C8E6C9]">Online</p>
                             </div>
                         </div>
                         {/* WhatsApp-like menu icon (three dots) */}
@@ -714,7 +984,7 @@
                                 <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`relative max-w-md px-4 py-3 rounded-2xl shadow-md transition-all duration-300 ease-in-out ${
                                         msg.sender === 'user'
-                                            ? 'bg-whatsapp-green text-white rounded-br-none message-tail-user'
+                                            ? 'bg-[#4A574F] text-white rounded-br-none message-tail-user'
                                             : 'bg-white text-gray-800 rounded-bl-none message-tail-bot'
                                     }`}>
                                         <p className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br />') }} />
@@ -725,7 +995,7 @@
                                                     <button
                                                         key={optIndex}
                                                         onClick={() => handleOptionClick(option)}
-                                                        className="px-4 py-1.5 bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition duration-300 text-sm font-medium shadow-sm hover:shadow-md"
+                                                        className="px-4 py-1.5 bg-[#C8E6C9] text-[#2E7D32] rounded-full hover:bg-[#A5D6A7] transition duration-300 text-sm font-medium shadow-sm hover:shadow-md"
                                                     >
                                                         {option}
                                                     </button>
@@ -751,9 +1021,9 @@
                     </main>
                     
                     {currentOrder.isOrderComplete ? (
-                        <footer className="p-4 bg-white border-t-2 border-green-500 shadow-xl rounded-t-2xl">
+                        <footer className="p-4 bg-white border-t-2 border-[#4A574F] shadow-xl rounded-t-2xl">
                             <h3 className="text-lg font-bold text-gray-800 mb-2">✅ Pedido Pronto!</h3>
-                            <div className="text-sm text-gray-600 mb-4 p-4 bg-green-50 rounded-xl border border-green-200 shadow-inner">
+                            <div className="text-sm text-gray-600 mb-4 p-4 bg-[#E0F0E0] rounded-xl border border-[#A5D6A7] shadow-inner">
                                 <p className="font-semibold mb-1">Resumo:</p>
                                 {currentOrder.items.map((item, index) => (
                                     <p key={index}>- {item.quantidade}x {item.produto} {item.sabor} {item.precoUnitario ? `(R$ ${item.precoUnitario.toFixed(2).replace('.', ',')}/un)` : ''}</p>
@@ -761,12 +1031,18 @@
                                 <p className="mt-2"><b>Cliente:</b> {currentOrder.customerName}</p>
                                 <p><b>Contato:</b> {currentOrder.phoneNumber}</p>
                                 <p><b>Entrega:</b> {currentOrder.deliveryAddress}</p>
-                                <p className="mt-2 text-lg font-bold text-green-700">Total: R$ {currentOrder.items.reduce((acc, item) => acc + (item.quantidade * (item.precoUnitario || 0)), 0).toFixed(2).replace('.', ',')}</p>
+                                {currentOrder.isDeliverySelected && currentOrder.deliveryAddress !== 'Retirada na Loja' && (
+                                    <p className="mt-1 font-bold text-red-600">Frete a verificar com o fabricante.</p>
+                                )}
+                                <p className="mt-2"><b>Forma de Pagamento:</b> {currentOrder.paymentMethod}</p>
+                                {currentOrder.paymentMethod === 'Débito' && <p className="text-xs text-gray-500">(Acréscimo de 2% pela taxa da máquina do cartão)</p>}
+                                {currentOrder.paymentMethod === 'Crédito' && <p className="text-xs text-gray-500">(Acréscimo de 6% pela taxa da máquina do cartão)</p>}
+                                <p className="mt-2 text-lg font-bold text-[#2E7D32]">Total: R$ {currentOrder.finalOrderTotal.toFixed(2).replace('.', ',')}</p>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2">
                                 <button
                                     onClick={handleSendOrder}
-                                    className="w-full p-3 bg-whatsapp-green text-white rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 font-bold flex items-center justify-center gap-2 transform hover:scale-105"
+                                    className="w-full p-3 bg-[#4A574F] text-white rounded-lg shadow-lg hover:bg-[#3A433D] focus:outline-none focus:ring-2 focus:ring-[#66BB6A] focus:ring-offset-2 transition duration-300 font-bold flex items-center justify-center gap-2 transform hover:scale-105"
                                 >
                                     Enviar Pedido via WhatsApp
                                     <span className="w-6 h-6">
@@ -776,19 +1052,19 @@
                             </div>
                         </footer>
                     ) : (
-                        <footer className="bg-white p-4 border-t border-gray-200 shadow-xl rounded-t-2xl">
+                        <footer className="p-4 bg-white border-t border-gray-200 shadow-xl rounded-t-2xl">
                             <form onSubmit={handleSendMessage} className="flex items-center gap-3">
                                 <input
                                     type="text"
                                     value={userInput}
                                     onChange={(e) => setUserInput(e.target.value)}
                                     placeholder={isInputDisabled ? "Escolha uma opção acima..." : "Digite sua mensagem..."}
-                                    className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-whatsapp-green transition duration-300 text-gray-700 placeholder-gray-400 shadow-sm"
+                                    className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#4A574F] transition duration-300 text-gray-700 placeholder-gray-400 shadow-sm"
                                     disabled={isInputDisabled}
                                 />
                                 <button
                                     type="submit"
-                                    className="p-3 bg-whatsapp-green text-white rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:shadow-none disabled:transform-none"
+                                    className="p-3 bg-[#4A574F] text-white rounded-full shadow-lg hover:bg-[#3A433D] focus:outline-none focus:ring-2 focus:ring-[#66BB6A] focus:ring-offset-2 transition duration-300 transform hover:scale-105 disabled:bg-gray-400 disabled:shadow-none disabled:transform-none"
                                     disabled={isLoading || !userInput.trim()}
                                 >
                                     <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l.684-.275a1 1 0 00.57-1.391L10.28 9.873a1 1 0 011.44-1.44l6.76 6.76a1 1 0 001.39-1.168l-14-7z"></path></svg>
