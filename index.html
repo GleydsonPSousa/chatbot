@@ -236,7 +236,7 @@
                 // Handle "Voltar" option universally based on current state
                 if (userText === 'Voltar ao Início') {
                     botResponse = 'Voltando ao início. O que você gostaria de fazer?';
-                    options = ['Fazer um Pedido', 'Quero uma Sugestão ✨']; // Removed Calcular Frete
+                    options = ['Fazer um Pedido', 'Quero uma Sugestão ✨'];
                     nextState = 'SELECT_ACTION';
                     return { botResponse, nextState, options };
                 } else if (userText === 'Voltar para Tipo de Produto') {
@@ -510,7 +510,7 @@
                             const basePrice = getPriceFromString(userText);
                             setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `${currentOrder.currentItemContainer} ${userText}`, currentItemPrice: basePrice, currentItemTotalPrice: basePrice, tempSelectedToppings: [] })); // Set base flavor with container and size, and its price, and total price for cup
                             
-                            let toppingsListText = 'Ótimo! Quais acompanhamentos você gostaria? Selecione um por vez.\n\nDisponíveis:\n';
+                            let toppingsListText = 'Ótimo! Quais acompanhamentos você gostaria? (Selecione um por vez)\n\nDisponíveis:\n';
                             acaiToppings.forEach(topping => {
                                 toppingsListText += `- ${topping.name} R$ ${topping.price}\n`;
                             });
@@ -532,9 +532,9 @@
                             const basePrice = getPriceFromString(userText);
                             setCurrentOrder(prev => ({ ...prev, currentItemFlavor: `${currentOrder.currentItemContainer} ${userText}`, currentItemPrice: basePrice, currentItemTotalPrice: basePrice })); // Set flavor and price, and total price for box
                             
-                            botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} custará R$ ${basePrice.toFixed(2).replace('.', ',')}. Confirma?`;
-                            options = ['Sim', 'Não', 'Voltar para Tamanho da Caixa de Açaí'];
-                            nextState = 'CONFIRM_ACAI_FINAL_ITEM'; // Reusing CONFIRM_ACAI_FINAL_ITEM for box sizes
+                            // For box açaí, we will now skip toppings and go directly to quantity
+                            botResponse = `Quantos açaís ${currentOrder.currentItemFlavor} você gostaria? (Digite a quantidade)`;
+                            nextState = 'SELECT_QUANTITY';
                         } else {
                             botResponse = 'Por favor, escolha um tamanho de caixa válido.';
                             options = ['2 litros - R$ 28,00', '5 litros - R$ 60,00', '10 litros - R$ 100,00', 'Voltar para Embalagem de Açaí'];
@@ -594,9 +594,37 @@
                         break;
 
                     case 'COLLECT_ACAI_TOPPINGS': // This state now handles button clicks for toppings
-                        if (userText === 'Finalizar Acompanhamentos') {
-                            const selectedToppingsText = currentOrder.tempSelectedToppings.length > 0 ? `com ${currentOrder.tempSelectedToppings.join(', ')}` : 'sem acompanhamentos';
-                            const toppingsCost = calculateToppingsPrice(currentOrder.tempSelectedToppings, acaiToppings);
+                        const isToppingSelected = acaiToppings.map(t => t.name).includes(userText);
+                        const isFinalizingToppings = userText === 'Finalizar Acompanhamentos';
+                        const isNoToppings = userText === 'Nenhum';
+
+                        let currentTempToppings = currentOrder.tempSelectedToppings;
+
+                        if (isToppingSelected) {
+                            if (!currentTempToppings.includes(userText)) {
+                                currentTempToppings = [...currentTempToppings, userText];
+                                setCurrentOrder(prev => ({
+                                    ...prev,
+                                    tempSelectedToppings: currentTempToppings,
+                                }));
+                                botResponse = `"${userText}" adicionado.`;
+                            } else {
+                                // If already selected, allow deselection
+                                currentTempToppings = currentTempToppings.filter(t => t !== userText);
+                                setCurrentOrder(prev => ({
+                                    ...prev,
+                                    tempSelectedToppings: currentTempToppings,
+                                }));
+                                botResponse = `"${userText}" removido.`;
+                            }
+                            // Re-list all toppings, but visually indicate selected ones
+                            options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
+                            nextState = 'COLLECT_ACAI_TOPPINGS'; // Stay in this state
+                        } else if (isFinalizingToppings || isNoToppings) {
+                            const selectedToppingsArray = currentTempToppings; // Use the accumulated toppings
+                            const selectedToppingsText = isNoToppings ? 'sem acompanhamentos' : (selectedToppingsArray.length > 0 ? `com ${selectedToppingsArray.join(', ')}` : 'sem acompanhamentos');
+                            const toppingsCost = isNoToppings ? 0 : calculateToppingsPrice(selectedToppingsArray, acaiToppings);
+                            
                             const currentItemTotal = currentOrder.currentItemPrice + toppingsCost;
 
                             setCurrentOrder(prev => ({
@@ -604,35 +632,12 @@
                                 currentItemToppings: selectedToppingsText,
                                 currentItemToppingsPrice: toppingsCost,
                                 currentItemTotalPrice: currentItemTotal,
-                                // tempSelectedToppings is cleared when new item starts
+                                tempSelectedToppings: [], // Clear temporary toppings after finalizing
                             }));
 
                             botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} ${selectedToppingsText} custará R$ ${currentItemTotal.toFixed(2).replace('.', ',')}. Confirma?`;
                             options = ['Sim', 'Não', 'Voltar para Acompanhamentos do Açaí'];
                             nextState = 'CONFIRM_ACAI_FINAL_ITEM';
-                        } else if (userText === 'Nenhum') {
-                            const currentItemTotal = currentOrder.currentItemPrice; // No toppings cost
-                            setCurrentOrder(prev => ({
-                                ...prev,
-                                currentItemToppings: 'sem acompanhamentos',
-                                currentItemToppingsPrice: 0,
-                                currentItemTotalPrice: currentItemTotal,
-                                tempSelectedToppings: [],
-                            }));
-                            botResponse = `Confirmando: Seu açaí ${currentOrder.currentItemFlavor} sem acompanhamentos custará R$ ${currentItemTotal.toFixed(2).replace('.', ',')}. Confirma?`;
-                            options = ['Sim', 'Não', 'Voltar para Acompanhamentos do Açaí'];
-                            nextState = 'CONFIRM_ACAI_FINAL_ITEM';
-                        } else if (acaiToppings.map(t => t.name).includes(userText)) {
-                            // Add selected topping to temporary list
-                            setCurrentOrder(prev => ({
-                                ...prev,
-                                tempSelectedToppings: [...prev.tempSelectedToppings, userText],
-                            }));
-                            botResponse = `"${userText}" adicionado. Selecione mais acompanhamentos ou "Finalizar Acompanhamentos".`;
-                            // Filter out already selected toppings from options
-                            const remainingToppings = acaiToppings.filter(t => !currentOrder.tempSelectedToppings.includes(t.name));
-                            options = remainingToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']); // Re-present options
-                            nextState = 'COLLECT_ACAI_TOPPINGS'; // Stay in this state
                         } else {
                             botResponse = 'Opção inválida. Por favor, selecione um acompanhamento ou "Finalizar Acompanhamentos".';
                             options = acaiToppings.map(t => t.name).concat(['Finalizar Acompanhamentos', 'Nenhum', 'Voltar para Embalagem de Açaí']);
@@ -695,7 +700,7 @@
 
                             const newItem = {
                                 produto: currentOrder.currentItemType,
-                                sabor: currentOrder.currentItemFlavor + (currentOrder.currentItemToppings && currentOrder.currentItemType === 'Açaí' ? ` ${currentOrder.currentItemToppings}` : ''), // Include toppings in flavor for Açaí
+                                sabor: currentOrder.currentItemFlavor + (currentOrder.currentItemToppings && currentOrder.currentItemType === 'Açaí' && currentOrder.currentItemContainer === 'Copo' ? ` ${currentOrder.currentItemToppings}` : ''), // Include toppings in flavor for Açaí Copo only
                                 quantidade: quantity,
                                 precoUnitario: unitPrice > 0 ? unitPrice : null, // Store unit price if calculated
                             };
@@ -953,7 +958,7 @@
                 }, 1000); // Small delay to allow WhatsApp redirect
             };
             
-            const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0 && conversationState !== 'COLLECT_ACAI_TOPPINGS' && conversationState !== 'SELECT_QUANTITY' && conversationState !== 'COLLECT_NAME' && conversationState !== 'COLLECT_DELIVERY_ADDRESS' && conversationState !== 'COLLECT_PHONE' && conversationState !== 'SUGGEST_ORDER_ACTION') || currentOrder.isOrderComplete;
+            const isInputDisabled = isLoading || (messages.length > 0 && messages[messages.length - 1].options && messages[messages.length - 1].options.length > 0 && conversationState !== 'SELECT_QUANTITY' && conversationState !== 'COLLECT_NAME' && conversationState !== 'COLLECT_DELIVERY_ADDRESS' && conversationState !== 'COLLECT_PHONE' && conversationState !== 'SUGGEST_ORDER_ACTION') || currentOrder.isOrderComplete;
 
             return (
                 <div className="flex flex-col h-screen antialiased text-gray-800">
@@ -995,7 +1000,9 @@
                                                     <button
                                                         key={optIndex}
                                                         onClick={() => handleOptionClick(option)}
-                                                        className="px-4 py-1.5 bg-[#C8E6C9] text-[#2E7D32] rounded-full hover:bg-[#A5D6A7] transition duration-300 text-sm font-medium shadow-sm hover:shadow-md"
+                                                        className={`px-4 py-1.5 rounded-full transition duration-300 text-sm font-medium shadow-sm hover:shadow-md
+                                                            ${currentOrder.tempSelectedToppings.includes(option) ? 'bg-[#2E7D32] text-white' : 'bg-[#C8E6C9] text-[#2E7D32] hover:bg-[#A5D6A7]'}`
+                                                        }
                                                     >
                                                         {option}
                                                     </button>
